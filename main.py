@@ -30,7 +30,9 @@ tieu_de_gui_yeu_cau_tiktok = {
     "Cookie": chuoi_cookie_tiktok_chuan_hoa,
     "Content-Type": "application/json",
     "Referer": "https://www.tiktok.com/messages",
-    "Origin": "https://www.tiktok.com"
+    "Origin": "https://www.tiktok.com",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7"
 }
 
 kich_ban_phan_hoi_ai = """
@@ -124,20 +126,23 @@ def ham_lay_thoi_gian_tao_tin_nhan(tin_nhan):
     return 0.0
 
 def ham_lay_danh_sach_tin_nhan_tiktok():
-    duong_dan_danh_sach_chat = "https://www.tiktok.com/api/im/chat/list/?count=10"
+    duong_dan_danh_sach_chat = "https://www.tiktok.com/api/im/chat/list/?aid=1988&app_language=vi-VN&app_name=tiktok_web&device_platform=web_pc&count=10"
     try:
         phan_hoi_tiktok = requests.get(duong_dan_danh_sach_chat, headers=tieu_de_gui_yeu_cau_tiktok, timeout=10)
+        print(f"[KIỂM TRA TRUY VẤN TIKTOK API] Mã HTTP: {phan_hoi_tiktok.status_code}")
         if phan_hoi_tiktok.status_code == 200:
             du_lieu_json = phan_hoi_tiktok.json()
             if "status_code" in du_lieu_json and du_lieu_json["status_code"] != 0:
-                print(f"[CẢNH BÁO COOKIE SAI HOẶC HẾT HẠN] TikTok báo lỗi: {du_lieu_json.get('status_msg')}")
+                print(f"[CẢNH BÁO COOKIE TIKTOK] Thông báo từ TikTok: {du_lieu_json.get('status_msg')}")
             return du_lieu_json
+        else:
+            print(f"[TIKTOK TỪ CHỦY TRUY CẬP] Phản hồi thô: {phan_hoi_tiktok.text[:150]}")
     except Exception as loi_tiktok:
         print(f"[NGOẠI LỆ TIKTOK LẤY TIN] {loi_tiktok}")
     return None
 
 def ham_gui_tin_nhan_tiktok(id_cuoc_tro_truyen, noi_dung_phan_hoi):
-    duong_dan_gui_tin_nhan = "https://www.tiktok.com/api/im/message/send/"
+    duong_dan_gui_tin_nhan = "https://www.tiktok.com/api/im/message/send/?aid=1988&app_language=vi-VN&app_name=tiktok_web&device_platform=web_pc"
     du_lieu_gui_tin = {
         "conversation_id": id_cuoc_tro_truyen,
         "type": 1,
