@@ -9,10 +9,10 @@ from flask import Flask
 ung_dung_flask = Flask(__name__)
 
 khoa_api_gemini = os.environ.get("GEMINI_API_KEY", "").strip()
-chuoi_cookie_tho_nhan_tu_render = os.environ.get("TIKTOK_COOKIE", "")
+chuoi_cookie_tho_nhan_tu_render = os.environ.get("TIKTOK_COOKIE", "").strip()
 
 def ham_trich_xuat_va_lam_sach_cookie(chuoi_cookie_goc):
-    danh_sach_khoa_truy_van = ['sessionid', 'sessionid_ss', 'ttwid', 'passport_csrf_token']
+    danh_sach_khoa_truy_van = ['sessionid', 'sessionid_ss', 'sid_tt', 'ttwid', 'tt_csrf_token', 'uid_tt', 'odin_tt']
     ket_qua_trich_xuat = []
     for khoa_can_tim in danh_sach_khoa_truy_van:
         tim_kiem = re.search(fr'{khoa_can_tim}=([^;\s\r\n]+)', chuoi_cookie_goc)
@@ -22,10 +22,12 @@ def ham_trich_xuat_va_lam_sach_cookie(chuoi_cookie_goc):
     return chuoi_cookie_hoan_chinh
 
 chuoi_cookie_tiktok_chuan_hoa = ham_trich_xuat_va_lam_sach_cookie(chuoi_cookie_tho_nhan_tu_render)
+if not chuoi_cookie_tiktok_chuan_hoa:
+    chuoi_cookie_tiktok_chuan_hoa = chuoi_cookie_tho_nhan_tu_render
 
-tieu_de_gui_yieu_cau_tiktok = {
+tieu_de_gui_yeu_cau_tiktok = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Cookie": chuoi_cookie_tiktok_chuan_hoa if chuoi_cookie_tiktok_chuan_hoa else chuoi_cookie_tho_nhan_tu_render,
+    "Cookie": chuoi_cookie_tiktok_chuan_hoa,
     "Content-Type": "application/json",
     "Referer": "https://www.tiktok.com/messages",
     "Origin": "https://www.tiktok.com"
@@ -64,8 +66,6 @@ def ham_tao_cau_tra_loi_tu_gemini(noi_dung_tin_nhan_den):
         if phan_hoi_gemini.status_code == 200:
             du_lieu_tra_ve = phan_hoi_gemini.json()
             return du_lieu_tra_ve["candidates"][0]["content"]["parts"][0]["text"].strip()
-        else:
-            print(f"[LỖI GEMINI API] Mã trạng thái: {phan_hoi_gemini.status_code}")
     except Exception as loi_gemini:
         print(f"[NGOẠI LỆ GEMINI API] {loi_gemini}")
     return "Cảm ơn bạn đã nhắn tin cho mình nhé!"
@@ -92,9 +92,7 @@ def ham_kiem_tra_phai_nhom_chat(cuoc_tro_truyen):
     loai_cuoc_tro_truyen = cuoc_tro_truyen.get("conversation_type") or cuoc_tro_truyen.get("type")
     la_nhom = cuoc_tro_truyen.get("is_group", False)
     danh_sach_thanh_vien = cuoc_tro_truyen.get("participants") or cuoc_tro_truyen.get("members")
-    if loai_cuoc_tro_truyen == 2:
-        return True
-    if la_nhom is True:
+    if loai_cuoc_tro_truyen == 2 or la_nhom is True:
         return True
     if isinstance(danh_sach_thanh_vien, list) and len(danh_sach_thanh_vien) > 2:
         return True
@@ -128,12 +126,12 @@ def ham_lay_thoi_gian_tao_tin_nhan(tin_nhan):
 def ham_lay_danh_sach_tin_nhan_tiktok():
     duong_dan_danh_sach_chat = "https://www.tiktok.com/api/im/chat/list/?count=10"
     try:
-        phan_hoi_tiktok = requests.get(duong_dan_danh_sach_chat, headers=tieu_de_gui_yieu_cau_tiktok, timeout=10)
-        print(f"[KIỂM TRA TIKTOK API] Mã trạng thái: {phan_hoi_tiktok.status_code}")
+        phan_hoi_tiktok = requests.get(duong_dan_danh_sach_chat, headers=tieu_de_gui_yeu_cau_tiktok, timeout=10)
         if phan_hoi_tiktok.status_code == 200:
-            return phan_hoi_tiktok.json()
-        else:
-            print(f"[LỖI TIKTOK RESPONSE] Chi tiết: {phan_hoi_tiktok.text[:150]}")
+            du_lieu_json = phan_hoi_tiktok.json()
+            if "status_code" in du_lieu_json and du_lieu_json["status_code"] != 0:
+                print(f"[CẢNH BÁO COOKIE SAI HOẶC HẾT HẠN] TikTok báo lỗi: {du_lieu_json.get('status_msg')}")
+            return du_lieu_json
     except Exception as loi_tiktok:
         print(f"[NGOẠI LỆ TIKTOK LẤY TIN] {loi_tiktok}")
     return None
@@ -146,53 +144,51 @@ def ham_gui_tin_nhan_tiktok(id_cuoc_tro_truyen, noi_dung_phan_hoi):
         "content": json.dumps({"text": noi_dung_phan_hoi})
     }
     try:
-        phan_hoi_gui = requests.post(duong_dan_gui_tin_nhan, headers=tieu_de_gui_yieu_cau_tiktok, data=json.dumps(du_lieu_gui_tin), timeout=10)
-        print(f"[GỬI TIN NHẮN TRẢ LỜI] Trạng thái: {phan_hoi_gui.status_code} - Kết quả: {phan_hoi_gui.text[:150]}")
+        phan_hoi_gui = requests.post(duong_dan_gui_tin_nhan, headers=tieu_de_gui_yeu_cau_tiktok, data=json.dumps(du_lieu_gui_tin), timeout=10)
+        print(f"[GỬI TIN NHẮN TRẢ LỜI] Trạng thái: {phan_hoi_gui.status_code} - Kết quả: {phan_hoi_gui.text[:100]}")
     except Exception as loi_gui_tin:
         print(f"[LỖI GỬI TIN NHẮN] {loi_gui_tin}")
 
 def ham_vong_lap_xu_ly_tin_nhan_chay_ngam():
     danh_sach_id_tin_nhan_da_xu_ly = set()
-    mieu_ta_thoi_gian_bat_dau = time.time()
-    moc_thoi_gian_15_phut_truoc = mieu_ta_thoi_gian_bat_dau - (15 * 60)
-    print(f"[BOT KHỞI CHẠY BẮT TIN NHẮN TẬP TRUNG] Chỉ xử lý tin nhắn cá nhân từ 15 phút trước trở lại...")
-    lan_dau_tien = True
+    moc_thoi_gian_15_phut_truoc = time.time() - (15 * 60)
+    print(f"[BOT KHỞI CHẠY BẮT TIN NHẮN TẬP TRUNG] Đang lắng nghe...")
+    
     while True:
-        du_lieu_hop_thu = ham_lay_danh_sach_tin_nhan_tiktok()
-        if du_lieu_hop_thu:
-            if lan_dau_tien:
-                print(f"[DỮ LIỆU THÔ TIKTOK CẤU TRÚC]: {list(du_lieu_hop_thu.keys())}")
-                lan_dau_tien = False
-            
-            danh_sach_cuoc_tro_truyen = ham_tim_danh_sach_cuoc_tro_truyen(du_lieu_hop_thu)
-            print(f"[SỐ CUỘC TRÒ TRUYỆN TÌM THẤY]: {len(danh_sach_cuoc_tro_truyen)}")
-            
-            for cuoc_tro_truyen in danh_sach_cuoc_tro_truyen:
-                if ham_kiem_tra_phai_nhom_chat(cuoc_tro_truyen):
-                    print(f"[BỎ QUA NHÓM CHAT]: ID cuộc trò chuyện {cuoc_tro_truyen.get('conversation_id')}")
-                    continue
+        try:
+            du_lieu_hop_thu = ham_lay_danh_sach_tin_nhan_tiktok()
+            if du_lieu_hop_thu:
+                danh_sach_cuoc_tro_truyen = ham_tim_danh_sach_cuoc_tro_truyen(du_lieu_hop_thu)
+                print(f"[SỐ CUỘC TRÒ TRUYỆN TÌM THẤY]: {len(danh_sach_cuoc_tro_truyen)}")
+                
+                for cuoc_tro_truyen in danh_sach_cuoc_tro_truyen:
+                    if ham_kiem_tra_phai_nhom_chat(cuoc_tro_truyen):
+                        continue
+                        
+                    id_cuoc_tro_truyen = cuoc_tro_truyen.get("conversation_id")
+                    tin_nhan_gan_nhat = cuoc_tro_truyen.get("last_message", {})
+                    id_tin_nhan = tin_nhan_gan_nhat.get("id") or tin_nhan_gan_nhat.get("server_message_id")
                     
-                id_cuoc_tro_truyen = cuoc_tro_truyen.get("conversation_id")
-                tin_nhan_gan_nhat = cuoc_tro_truyen.get("last_message", {})
-                id_tin_nhan = tin_nhan_gan_nhat.get("id") or tin_nhan_gan_nhat.get("server_message_id")
-                
-                thoi_gian_tao_tin = ham_lay_thoi_gian_tao_tin_nhan(tin_nhan_gan_nhat)
-                
-                if thoi_gian_tao_tin > 0 and thoi_gian_tao_tin < moc_thoi_gian_15_phut_truoc:
-                    if id_tin_nhan:
+                    thoi_gian_tao_tin = ham_lay_thoi_gian_tao_tin_nhan(tin_nhan_gan_nhat)
+                    
+                    if thoi_gian_tao_tin > 0 and thoi_gian_tao_tin < moc_thoi_gian_15_phut_truoc:
+                        if id_tin_nhan:
+                            danh_sach_id_tin_nhan_da_xu_ly.add(id_tin_nhan)
+                        continue
+                        
+                    noi_dung_chuan = ham_giai_ma_noi_dung_tin_nhan(tin_nhan_gan_nhat)
+                    la_tin_nhan_do_minh_gui = tin_nhan_gan_nhat.get("from_user_id") == cuoc_tro_truyen.get("user_id")
+                    
+                    if id_tin_nhan and id_tin_nhan not in danh_sach_id_tin_nhan_da_xu_ly:
                         danh_sach_id_tin_nhan_da_xu_ly.add(id_tin_nhan)
-                    continue
-                    
-                noi_dung_chuan = ham_giai_ma_noi_dung_tin_nhan(tin_nhan_gan_nhat)
-                la_tin_nhan_do_minh_gui = tin_nhan_gan_nhat.get("from_user_id") == cuoc_tro_truyen.get("user_id")
-                
-                if id_tin_nhan and id_tin_nhan not in danh_sach_id_tin_nhan_da_xu_ly:
-                    danh_sach_id_tin_nhan_da_xu_ly.add(id_tin_nhan)
-                    if noi_dung_chuan and not la_tin_nhan_do_minh_gui:
-                        print(f"[PHÁT HIỆN TIN NHẮN MỚI CÁ NHÂN] ID: {id_tin_nhan} - Nội dung: '{noi_dung_chuan}'")
-                        cau_tra_loi_ai = ham_tao_cau_tra_loi_tu_gemini(noi_dung_chuan)
-                        print(f"[GEMINI TRẢ LỜI]: '{cau_tra_loi_ai}'")
-                        ham_gui_tin_nhan_tiktok(id_cuoc_tro_truyen, cau_tra_loi_ai)
+                        if noi_dung_chuan and not la_tin_nhan_do_minh_gui:
+                            print(f"[PHÁT HIỆN TIN NHẮN MỚI CÁ NHÂN] ID: {id_tin_nhan} - Nội dung: '{noi_dung_chuan}'")
+                            cau_tra_loi_ai = ham_tao_cau_tra_loi_tu_gemini(noi_dung_chuan)
+                            print(f"[GEMINI TRẢ LỜI]: '{cau_tra_loi_ai}'")
+                            ham_gui_tin_nhan_tiktok(id_cuoc_tro_truyen, cau_tra_loi_ai)
+        except Exception as loi_vong_lap:
+            print(f"[CẢNH BÁO VÒNG LẶP NGUYÊN NHÂN LỖI]: {loi_vong_lap}")
+            
         time.sleep(5)
 
 @ung_dung_flask.route('/')
