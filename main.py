@@ -8,12 +8,14 @@ from flask import Flask
 ung_dung_flask = Flask(__name__)
 
 KHOA_API_GEMINI = os.environ.get("GEMINI_API_KEY", "")
-MA_SESSION_ID = os.environ.get("TIKTOK_SESSION_ID", "")
+CHUOI_COOKIE_TIKTOK = os.environ.get("TIKTOK_COOKIE", "")
 
 TIEU_DE_HTTP_TIKTOK = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Cookie": f"sessionid={MA_SESSION_ID}; sessionid_ss={MA_SESSION_ID};",
-    "Content-Type": "application/json"
+    "Cookie": CHUOI_COOKIE_TIKTOK,
+    "Content-Type": "application/json",
+    "Referer": "https://www.tiktok.com/messages",
+    "Origin": "https://www.tiktok.com"
 }
 
 LOI_DAN_CHO_AI = """
@@ -49,18 +51,23 @@ def tao_cau_tra_loi_tu_gemini(noi_dung_tin_nhan_den):
         if phan_hoi_gemini.status_code == 200:
             du_lieu_json = phan_hoi_gemini.json()
             return du_lieu_json["candidates"][0]["content"]["parts"][0]["text"].strip()
-    except Exception:
-        pass
+        else:
+            print(f"[LOI GEMINI] Trang thai HTTP: {phan_hoi_gemini.status_code}")
+    except Exception as loi_gemini:
+        print(f"[NGOAI LE GEMINI] {loi_gemini}")
     return "Cảm ơn bạn đã nhắn tin cho mình nhé!"
 
 def lay_danh_sach_cuoc_tro_truyen_tiktok():
     duong_dan_danh_sach = "https://www.tiktok.com/api/im/chat/list/?count=10"
     try:
         phan_hoi = requests.get(duong_dan_danh_sach, headers=TIEU_DE_HTTP_TIKTOK, timeout=10)
+        print(f"[KIEM TRA TIKTOK] Ma phan hoi: {phan_hoi.status_code}")
         if phan_hoi.status_code == 200:
             return phan_hoi.json()
-    except Exception:
-        pass
+        else:
+            print(f"[LOI TIKTOK] Noi dung phan hoi: {phan_hoi.text[:200]}")
+    except Exception as loi_tiktok:
+        print(f"[NGOAI LE TIKTOK] {loi_tiktok}")
     return None
 
 def gui_tin_nhan_tiktok_web(id_cuoc_tro_truyen, noi_dung_phan_hoi):
@@ -71,12 +78,14 @@ def gui_tin_nhan_tiktok_web(id_cuoc_tro_truyen, noi_dung_phan_hoi):
         "content": json.dumps({"text": noi_dung_phan_hoi})
     }
     try:
-        requests.post(duong_dan_gui_tin, headers=TIEU_DE_HTTP_TIKTOK, data=json.dumps(du_lieu_gui), timeout=10)
-    except Exception:
-        pass
+        phan_hoi_gui = requests.post(duong_dan_gui_tin, headers=TIEU_DE_HTTP_TIKTOK, data=json.dumps(du_lieu_gui), timeout=10)
+        print(f"[GUI TIN NHAN] Trang thai: {phan_hoi_gui.status_code} - Noi dung: {phan_hoi_gui.text[:100]}")
+    except Exception as loi_gui:
+        print(f"[LOI GUI TIN] {loi_gui}")
 
 def vong_lap_xu_ly_tin_nhan_chay_ngam():
     danh_sach_tin_nhan_da_xu_ly = set()
+    print("[BOT KICH HOAT] Bat dau vong lap quet tin nhan TikTok...")
     while True:
         du_lieu_chat = lay_danh_sach_cuoc_tro_truyen_tiktok()
         if du_lieu_chat and "conversations" in du_lieu_chat:
@@ -90,6 +99,7 @@ def vong_lap_xu_ly_tin_nhan_chay_ngam():
                 if id_tin_nhan and id_tin_nhan not in danh_sach_tin_nhan_da_xu_ly:
                     danh_sach_tin_nhan_da_xu_ly.add(id_tin_nhan)
                     if noi_dung_tin_nhan and not la_tin_nhan_cua_toi:
+                        print(f"[PHAT HIEN TIN NHAN MOI] Noi dung: '{noi_dung_tin_nhan}'")
                         cau_tra_loi = tao_cau_tra_loi_tu_gemini(noi_dung_tin_nhan)
                         gui_tin_nhan_tiktok_web(id_cuoc_tro_truyen, cau_tra_loi)
         time.sleep(5)
